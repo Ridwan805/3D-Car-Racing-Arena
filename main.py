@@ -69,7 +69,7 @@ def apply_cheat_mode():
 def apply_stealth_mode(): 
     pass
 
-def idle(): 
+def animate(): 
     pass
 
 def showScreen(): 
