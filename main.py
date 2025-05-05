@@ -1,4 +1,3 @@
-@ -1,31 +1,77 @@
 from OpenGL.GL import *
 from OpenGL.GLUT import *
 from OpenGL.GLU import *
