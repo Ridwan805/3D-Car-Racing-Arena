@@ -3,7 +3,7 @@ from OpenGL.GLU import *
 from OpenGL.GLUT import *
 import math
 import random
-
+import time
 # Player attributes
 player_x = 0.0
 player_y = 0.0
@@ -15,11 +15,16 @@ camera_angle_h = 0
 camera_height = 10
 enemy_movement_started = False
 enemy_movement_timer = 0
-
+weather_state = "day"  # Can be "day", "night", or "rainy"
+rain_drops = []
 bullets = []
 enemies = []
 obstacles = []
-
+score=0
+# Global variable initialization
+enemy_movement_started = False  # Set to False initially to prevent movement
+enemy_movement_timer = 0  # Initialize enemy movement timer
+cheat_mode= False
 def draw_track():
     glPushMatrix()
     column_colors = [(0.3, 0.3, 0.3), (0.0, 0.0, 0.0)]
@@ -131,84 +136,134 @@ def update_bullets():
     for bullet in bullets[:]:
         bullet['x'] += bullet['dx']
         bullet['z'] += bullet['dz']
+        
+        # Remove bullet if it's out of bounds
         if abs(bullet['x']) > 50 or abs(bullet['z']) > 50:
             bullets.remove(bullet)
 
 def update_enemies():
-    global enemies, bullets, enemy_movement_started, enemy_movement_timer, player_x, player_z
+    global enemies, bullets, enemy_movement_started, enemy_movement_timer, player_x, player_z, weather_state
 
-    if not enemy_movement_started:
+    if not enemy_movement_started:  # Don't move the enemies if the player hasn't pressed W
         return
 
-    enemy_movement_timer += 1  # Slow down enemy movement
+    # Adjust speed based on weather state
+    enemy_speed = 0.02 if weather_state != "rainy" else 0.03  # Make speed slower
+    enemy_movement_timer += 1  # Slow down enemy movement over time
 
     for enemy in enemies[:]:
+        # Move the enemy upwards randomly towards the top line
         if enemy_movement_timer % 8 == 0:  # Move every 8 frames
-            # Try small random side movement (zigzag)
-            possible_steps = [(-0.05, 0.1), (0.0, 0.1), (0.05, 0.1)]
-            random.shuffle(possible_steps)
+            dx = random.uniform(-enemy_speed, enemy_speed)  # Random side movement
+            dz = 0.05  # Slow upwards movement
 
-            for dx, dz in possible_steps:
-                new_x = enemy['x'] + dx
-                new_z = enemy['z'] + dz
+            new_x = enemy['x'] + dx
+            new_z = enemy['z'] + dz
 
-                # Check collision with obstacles
-                blocked = False
-                for ox, oy, oz in obstacles:
-                    if abs(new_x - ox) < 1.5 and abs(new_z - oz) < 1.5:
-                        blocked = True
-                        break
-
-                if not blocked and -15 <= new_x <= 15 and -45 <= new_z <= 45:
-                    enemy['x'] = new_x
-                    enemy['z'] = new_z
+            # Check collision with obstacles
+            blocked = False
+            for ox, oy, oz in obstacles:
+                if abs(new_x - ox) < 1.5 and abs(new_z - oz) < 1.5:
+                    blocked = True
                     break
 
-        # Shoot bullet at player if close
+            if not blocked and -15 <= new_x <= 15 and -45 <= new_z <= 45:
+                enemy['x'] = new_x
+                enemy['z'] = new_z
+
+            if enemy['z'] >= 45:  # Enemy reaches top, it stays there
+                enemy['z'] = 45  # Keep it at the top, no further upward movement
+
+        # Shooting logic: shoot at player every second if within range
         dist_to_player = math.sqrt((player_x - enemy['x'])**2 + (player_z - enemy['z'])**2)
-        if dist_to_player < 10:
-            dx = player_x - enemy['x']
-            dz = player_z - enemy['z']
-            length = math.sqrt(dx**2 + dz**2)
-            if length != 0:
-                dx /= length
-                dz /= length
-                bullets.append({
-                    'x': enemy['x'], 'y': 0.5, 'z': enemy['z'],
-                    'dx': dx * 0.2, 'dz': dz * 0.2
-                })
+        current_time = time.time()
 
-        # Collision with player car
-        if dist_to_player < 1.2:
-            enemies.remove(enemy)
-            # Respawn a new enemy at the bottom of the track
-            spawn_x = random.uniform(-10, 10)
-            spawn_z = random.uniform(-45, -35)
-            enemies.append({'x': spawn_x, 'y': 0.5, 'z': spawn_z, 'angle': 0})
+        if dist_to_player < 10:  # If player is close, shoot at player
+            if 'last_shot_time' not in enemy:  # Initialize last shot time
+                enemy['last_shot_time'] = current_time
+
+            # Shoot every 1 second (not continuously)
+            if current_time - enemy['last_shot_time'] >= 1:
+                dx = player_x - enemy['x']
+                dz = player_z - enemy['z']
+                length = math.sqrt(dx**2 + dz**2)
+                if length != 0:
+                    dx /= length  # Normalize direction
+                    dz /= length
+                    bullets.append({
+                        'x': enemy['x'], 'y': 0.5, 'z': enemy['z'],
+                        'dx': dx * 0.2, 'dz': dz * 0.2
+                    })
+                enemy['last_shot_time'] = current_time  # Reset last shot time
+
+        # Check for collision with player's bullets
+        for bullet in bullets[:]:
+            if abs(bullet['x'] - enemy['x']) < 1 and abs(bullet['z'] - enemy['z']) < 1:
+                # Player bullet hits enemy, respawn the enemy
+                print(f"Enemy destroyed by bullet. Respawning...")
+                enemies.remove(enemy)  # Destroy enemy
+                
+                bullets.remove(bullet)  # Remove the bullet
+                respawn_enemy(enemy)  # Respawn the enemy
+                break
 
 
-        # Check if player is near
-        dist = math.sqrt((player_x - enemy['x'])**2 + (player_z - enemy['z'])**2)
-        if dist < 10:
-            dx = player_x - enemy['x']
-            dz = player_z - enemy['z']
-            length = math.sqrt(dx**2 + dz**2)
-            if length != 0:
-                dx /= length
-                dz /= length
-                bullets.append({
-                    'x': enemy['x'], 'y': 0.5, 'z': enemy['z'],
-                    'dx': dx * 0.2, 'dz': dz * 0.2
-                })
+# Respawn enemy at the bottom of the track
+def respawn_enemy(enemy):
+    spawn_x = random.uniform(-10, 10)
+    spawn_z = random.uniform(-45, -35)  # Start at the bottom horizontal line
+    enemy.update({'x': spawn_x, 'y': 0.5, 'z': spawn_z, 'angle': 0})  # Reset enemy position
+    print(f"Enemy respawned at x: {spawn_x}, z: {spawn_z}")
 
+                
+def generate_rain():
+    rain_drops = []
+    for _ in range(100):  # Generate 100 raindrops
+        x = random.uniform(-15, 15)
+        z = random.uniform(-45, 45)
+        y = random.uniform(5, 10)  # Start the rain from the top of the screen
+        rain_drops.append({'x': x, 'y': y, 'z': z})
+    return rain_drops
+
+def draw_rain():
+    global rain_drops
+    if weather_state == "rainy":
+        glColor3f(0.7, 0.7, 1.0)  # Light blue color for rain
+        glBegin(GL_LINES)
+        for raindrop in rain_drops:
+            glVertex3f(raindrop['x'], raindrop['y'], raindrop['z'])
+            glVertex3f(raindrop['x'], raindrop['y'] - 1, raindrop['z'])  # Rain drops fall down
+        glEnd()
+
+        # Update rain drops to fall
+        for raindrop in rain_drops:
+            raindrop['y'] -= 0.1  # Move raindrop downward
+            if raindrop['y'] < -45:  # If raindrop goes below the track, reset it
+                raindrop['y'] = random.uniform(5, 10)
+
+
+# Function to update car and enemy speeds when it's rainy
+def update_car_speed():
+    global player_speed, enemy_movement_timer, weather_state
+    if weather_state == "rainy":
+        player_speed = 0.5  # Increase player speed in rainy weather
+        enemy_movement_timer = max(0.4, enemy_movement_timer)  # Speed up enemy movement
+    else:
+        player_speed = 0.3  # Normal speed
+        enemy_movement_timer = 0.8  # Normal enemy speed
 
             
 def keyboardListener(key, x, y):
-    global player_x, player_z, player_angle, enemy_movement_started
+    global player_x, player_z, player_angle, enemy_movement_started, weather_state, rain_drops, player_speed, cheat_mode
+
     move_step = 0.4
     rot_step = 5
     dx = move_step * math.sin(math.radians(player_angle))
     dz = move_step * math.cos(math.radians(player_angle))
+
+    # Adjust speed based on weather state (Rainy weather increases speed)
+    if weather_state == "rainy":
+        move_step *= 1.5  # Increase player speed in rainy weather
 
     min_x, max_x = -15, 15
     min_z, max_z = -45, 45
@@ -220,7 +275,7 @@ def keyboardListener(key, x, y):
         return False
 
     if key == b'w':
-        enemy_movement_started = True
+        enemy_movement_started = True  # Start enemy movement when 'W' is pressed
         new_x = player_x + dx
         new_z = player_z + dz
         if min_x < new_x < max_x and min_z < new_z < max_z and not is_colliding(new_x, new_z):
@@ -236,6 +291,22 @@ def keyboardListener(key, x, y):
         player_angle += rot_step
     elif key == b'd':
         player_angle -= rot_step
+    elif key == b'1':  # Day
+        weather_state = "day"
+    elif key == b'2':  # Night
+        weather_state = "night"
+    elif key == b'3':  # Rainy
+        weather_state = "rainy"
+        rain_drops = generate_rain()  # Generate new rain drops
+    elif key == b'c' or key == b'C':  # Toggle Cheat Mode
+        cheat_mode = not cheat_mode
+        if cheat_mode:
+            print("Cheat mode activated: Auto-driving and Auto-firing enabled!")
+        else:
+            print("Cheat mode deactivated.")
+
+    glutPostRedisplay()
+
 
 
 
@@ -252,13 +323,20 @@ def specialKeyListener(key, x, y):
 
 def mouseListener(button, state, x, y):
     global camera_view, bullets
+
     if button == GLUT_LEFT_BUTTON and state == GLUT_DOWN:
+        # Fire a bullet from the player car
         dx = 0.5 * math.sin(math.radians(player_angle))
         dz = 0.5 * math.cos(math.radians(player_angle))
         bullet = {'x': player_x + dx, 'y': 0.5, 'z': player_z + dz, 'dx': dx, 'dz': dz}
         bullets.append(bullet)
+        print("Player Bullet Fired!")
+
     elif button == GLUT_RIGHT_BUTTON and state == GLUT_DOWN:
+        # Toggle between first-person and third-person views
         camera_view = "first_person" if camera_view == "third_person" else "third_person"
+        print(f"Camera view switched to {camera_view}")
+
 
 def setupCamera():
     glMatrixMode(GL_PROJECTION)
@@ -275,22 +353,76 @@ def setupCamera():
         lx = player_x + math.sin(math.radians(player_angle))
         lz = player_z + math.cos(math.radians(player_angle))
         gluLookAt(player_x, player_y + 2, player_z, lx, player_y + 2, lz, 0, 1, 0)
-
+        
 def animate():
+    global enemies, bullets, missed_bullets, life, game_over, score, cheat_mode
+    global player_x, player_z, player_angle  # Ensure these are referenced globally
+
+    
+
+    if cheat_mode:
+        # Auto-drive towards the closest enemy
+        closest_enemy = min(enemies, key=lambda enemy: math.sqrt((player_x - enemy['x'])**2 + (player_z - enemy['z'])**2), default=None)
+        if closest_enemy:
+            # Move player towards the closest enemy
+            dx = closest_enemy['x'] - player_x
+            dz = closest_enemy['z'] - player_z
+            angle_to_enemy = math.atan2(dz, dx)
+            player_angle = math.degrees(angle_to_enemy)
+            
+            move_step = 0.4  # Regular speed
+            player_x += move_step * math.cos(angle_to_enemy)
+            player_z += move_step * math.sin(angle_to_enemy)
+            
+            # Auto-fire at the closest enemy
+            dist_to_enemy = math.sqrt((player_x - closest_enemy['x'])**2 + (player_z - closest_enemy['z'])**2)
+            if dist_to_enemy < 10:
+                dx = closest_enemy['x'] - player_x
+                dz = closest_enemy['z'] - player_z
+                length = math.sqrt(dx**2 + dz**2)
+                if length != 0:
+                    dx /= length  # Normalize direction
+                    dz /= length
+                    bullets.append({
+                        'x': player_x, 'y': 0.5, 'z': player_z,
+                        'dx': dx * 0.2, 'dz': dz * 0.2
+                    })
+
     update_bullets()
-    update_enemies()
-    glutPostRedisplay()
+    update_enemies()  # Update enemy movement and shooting
+    glutPostRedisplay()  # Request a redraw
+
+
 
 def showScreen():
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
     glLoadIdentity()
+
+    # Set background color based on weather state
+    if weather_state == "day":
+        glClearColor(1.0, 1.0, 0.0, 1.0)  # Yellow for day
+    elif weather_state == "night":
+        glClearColor(0.0, 0.0, 0.0, 1.0)  # Black for night
+    elif weather_state == "rainy":
+        glClearColor(0.0, 0.0, 0.0, 1.0)  # Black for rainy (night time effect)
+
+    # Camera setup
     setupCamera()
+
+    # Draw the track, obstacles, player car, and enemy cars
     draw_track()
     draw_obstacle()
     draw_player_car()
     draw_enemy_car()
+
+    # Draw rain if the weather is rainy
+    draw_rain()
+
+    # Draw bullets and other objects
     draw_bullets()
+
     glutSwapBuffers()
+
 
 def main():
     glutInit()
