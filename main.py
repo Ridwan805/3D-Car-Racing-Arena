@@ -21,6 +21,12 @@ bullets = []
 enemies = []
 obstacles = []
 score=0
+boost_active = False
+boost_timer = 0
+boost_duration_frames = 120  # ~2 seconds at 60fps
+
+
+
 # Global variable initialization
 enemy_movement_started = False  # Set to False initially to prevent movement
 enemy_movement_timer = 0  # Initialize enemy movement timer
@@ -144,68 +150,60 @@ def update_bullets():
 def update_enemies():
     global enemies, bullets, enemy_movement_started, enemy_movement_timer, player_x, player_z, weather_state
 
-    if not enemy_movement_started:  # Don't move the enemies if the player hasn't pressed W
+    if not enemy_movement_started:
         return
 
-    # Adjust speed based on weather state
-    enemy_speed = 0.02 if weather_state != "rainy" else 0.03  # Make speed slower
-    enemy_movement_timer += 1  # Slow down enemy movement over time
+    enemy_speed = 0.02 if weather_state != "rainy" else 0.035
+    enemy_movement_timer += 1
 
-    for enemy in enemies[:]:
-        # Move the enemy upwards randomly towards the top line
-        if enemy_movement_timer % 8 == 0:  # Move every 8 frames
-            dx = random.uniform(-enemy_speed, enemy_speed)  # Random side movement
-            dz = 0.05  # Slow upwards movement
+    for i, enemy in enumerate(enemies[:]):
+        if enemy_movement_timer % 8 == 0:
+            dx = random.uniform(-enemy_speed, enemy_speed)
+            dz = 0.05
 
             new_x = enemy['x'] + dx
             new_z = enemy['z'] + dz
 
-            # Check collision with obstacles
-            blocked = False
-            for ox, oy, oz in obstacles:
-                if abs(new_x - ox) < 1.5 and abs(new_z - oz) < 1.5:
-                    blocked = True
-                    break
+            # Check obstacle collision
+            if not any(abs(new_x - ox) < 1.5 and abs(new_z - oz) < 1.5 for ox, oy, oz in obstacles):
+                if -15 <= new_x <= 15 and -45 <= new_z <= 45:
+                    enemies[i]['x'] = new_x
+                    enemies[i]['z'] = new_z
 
-            if not blocked and -15 <= new_x <= 15 and -45 <= new_z <= 45:
-                enemy['x'] = new_x
-                enemy['z'] = new_z
-
-            if enemy['z'] >= 45:  # Enemy reaches top, it stays there
-                enemy['z'] = 45  # Keep it at the top, no further upward movement
-
-        # Shooting logic: shoot at player every second if within range
+        # Shooting logic
         dist_to_player = math.sqrt((player_x - enemy['x'])**2 + (player_z - enemy['z'])**2)
         current_time = time.time()
-
-        if dist_to_player < 10:  # If player is close, shoot at player
-            if 'last_shot_time' not in enemy:  # Initialize last shot time
+        if dist_to_player < 10:
+            if 'last_shot_time' not in enemy:
                 enemy['last_shot_time'] = current_time
-
-            # Shoot every 1 second (not continuously)
             if current_time - enemy['last_shot_time'] >= 1:
                 dx = player_x - enemy['x']
                 dz = player_z - enemy['z']
                 length = math.sqrt(dx**2 + dz**2)
                 if length != 0:
-                    dx /= length  # Normalize direction
+                    dx /= length
                     dz /= length
                     bullets.append({
                         'x': enemy['x'], 'y': 0.5, 'z': enemy['z'],
-                        'dx': dx * 0.2, 'dz': dz * 0.2
+                        'dx': dx * 0.1, 'dz': dz * 0.1,
+                        'type': 'enemy'
                     })
-                enemy['last_shot_time'] = current_time  # Reset last shot time
+                enemy['last_shot_time'] = current_time
 
-        # Check for collision with player's bullets
-        for bullet in bullets[:]:
-            if abs(bullet['x'] - enemy['x']) < 1 and abs(bullet['z'] - enemy['z']) < 1:
-                # Player bullet hits enemy, respawn the enemy
-                print(f"Enemy destroyed by bullet. Respawning...")
-                enemies.remove(enemy)  # Destroy enemy
-                
-                bullets.remove(bullet)  # Remove the bullet
-                respawn_enemy(enemy)  # Respawn the enemy
-                break
+        # Collision detection (only with player bullets)
+        for bullet in bullets:
+            if bullet.get('type', 'player') == 'player':  # Check only player bullets
+                if abs(bullet['x'] - enemy['x']) < 1 and abs(bullet['z'] - enemy['z']) < 1:
+                    print("Enemy destroyed by player bullet.")
+                    enemies.pop(i)
+                    bullets.remove(bullet)
+                    spawn_x = random.uniform(-10, 10)
+                    spawn_z = random.uniform(-45, -35)
+                    enemies.insert(i, {'x': spawn_x, 'z': spawn_z, 'angle': 0, 'y': 0.5})
+                    break
+
+
+
 
 
 # Respawn enemy at the bottom of the track
@@ -244,29 +242,33 @@ def draw_rain():
 
 # Function to update car and enemy speeds when it's rainy
 def update_car_speed():
-    global player_speed, enemy_movement_timer, weather_state
+    global player_speed, enemy_movement_timer, weather_state, boost_active
+
+    
     if weather_state == "rainy":
-        player_speed = 0.5  # Increase player speed in rainy weather
+        player_speed = 0.8  # Increase player speed in rainy weather
         enemy_movement_timer = max(0.4, enemy_movement_timer)  # Speed up enemy movement
     else:
         player_speed = 0.3  # Normal speed
         enemy_movement_timer = 0.8  # Normal enemy speed
-
             
 def keyboardListener(key, x, y):
-    global player_x, player_z, player_angle, enemy_movement_started, weather_state, rain_drops, player_speed, cheat_mode
+    global player_x, player_z, player_angle
+    global enemy_movement_started, weather_state, rain_drops
+    global cheat_mode, boost_active, boost_timer, player_speed
 
-    move_step = 0.4
-    rot_step = 5
-    dx = move_step * math.sin(math.radians(player_angle))
-    dz = move_step * math.cos(math.radians(player_angle))
+    rot_step = 2
+    base_speed = player_speed  # Use player_speed as the base speed
 
-    # Adjust speed based on weather state (Rainy weather increases speed)
+    # Apply weather-based speed adjustments
     if weather_state == "rainy":
-        move_step *= 1.5  # Increase player speed in rainy weather
+        base_speed *= 1.5
+    if cheat_mode:
+        base_speed *= 0.5
+    
 
-    min_x, max_x = -15, 15
-    min_z, max_z = -45, 45
+    dx = base_speed * math.sin(math.radians(player_angle))
+    dz = base_speed * math.cos(math.radians(player_angle))
 
     def is_colliding(new_x, new_z):
         for ox, oy, oz in obstacles:
@@ -274,40 +276,38 @@ def keyboardListener(key, x, y):
                 return True
         return False
 
-    if key == b'w':
-        enemy_movement_started = True  # Start enemy movement when 'W' is pressed
+    if key == b'w':  # Move forward
+        enemy_movement_started = True
         new_x = player_x + dx
         new_z = player_z + dz
-        if min_x < new_x < max_x and min_z < new_z < max_z and not is_colliding(new_x, new_z):
+        if -15 < new_x < 15 and -45 < new_z < 45 and not is_colliding(new_x, new_z):
             player_x = new_x
             player_z = new_z
-    elif key == b's':
+
+    elif key == b's':  # Move backward
         new_x = player_x - dx
         new_z = player_z - dz
-        if min_x < new_x < max_x and min_z < new_z < max_z and not is_colliding(new_x, new_z):
+        if -15 < new_x < 15 and -45 < new_z < 45 and not is_colliding(new_x, new_z):
             player_x = new_x
             player_z = new_z
-    elif key == b'a':
+
+    elif key == b'a':  # Rotate left
         player_angle += rot_step
-    elif key == b'd':
+    elif key == b'd':  # Rotate right
         player_angle -= rot_step
-    elif key == b'1':  # Day
+    elif key == b'1':  # Set weather to day
         weather_state = "day"
-    elif key == b'2':  # Night
+    elif key == b'2':  # Set weather to night
         weather_state = "night"
-    elif key == b'3':  # Rainy
+    elif key == b'3':  # Set weather to rainy
         weather_state = "rainy"
-        rain_drops = generate_rain()  # Generate new rain drops
-    elif key == b'c' or key == b'C':  # Toggle Cheat Mode
+        rain_drops = generate_rain()
+    elif key == b'c' or key == b'C':  # Toggle cheat mode
         cheat_mode = not cheat_mode
-        if cheat_mode:
-            print("Cheat mode activated: Auto-driving and Auto-firing enabled!")
-        else:
-            print("Cheat mode deactivated.")
+        print(f"Cheat mode {'ON' if cheat_mode else 'OFF'}")
+    
 
     glutPostRedisplay()
-
-
 
 
 def specialKeyListener(key, x, y):
@@ -370,7 +370,7 @@ def animate():
             angle_to_enemy = math.atan2(dz, dx)
             player_angle = math.degrees(angle_to_enemy)
             
-            move_step = 0.4  # Regular speed
+            move_step = 0.2  # Regular speed
             player_x += move_step * math.cos(angle_to_enemy)
             player_z += move_step * math.sin(angle_to_enemy)
             
@@ -391,6 +391,9 @@ def animate():
     update_bullets()
     update_enemies()  # Update enemy movement and shooting
     glutPostRedisplay()  # Request a redraw
+   
+    glutPostRedisplay()
+
 
 
 
