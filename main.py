@@ -20,17 +20,30 @@ rain_drops = []
 bullets = []
 enemies = []
 obstacles = []
-score=0
+score= 10
 boost_active = False
 boost_timer = 0
 boost_duration_frames = 120  # ~2 seconds at 60fps
 
-
+cheat_mode_2 = False  # Make sure cheat_mode_2 is defined here
+passive_cheat_mode = False  # Make sure passive_cheat_mode is defined here
+cheat_mode_2_start_time = 0  # Initialize start time for cheat mode 2
+passive_cheat_start_time = 0
+traps = []
 
 # Global variable initialization
 enemy_movement_started = False  # Set to False initially to prevent movement
 enemy_movement_timer = 0  # Initialize enemy movement timer
 cheat_mode= False
+
+def draw_traps():
+    for trap in traps:
+        glPushMatrix()
+        glTranslatef(trap['x'], 0.5, trap['z'])  # Position the trap behind the player
+        glColor3f(1.0, 0.0, 0.0)  # Red color for traps
+        glutSolidSphere(0.2, 20, 20)  # Draw a red sphere representing a trap
+        glPopMatrix()
+        
 def draw_track():
     glPushMatrix()
     column_colors = [(0.3, 0.3, 0.3), (0.0, 0.0, 0.0)]
@@ -149,6 +162,7 @@ def update_bullets():
 
 def update_enemies():
     global enemies, bullets, enemy_movement_started, enemy_movement_timer, player_x, player_z, weather_state
+    global score, cheat_mode_2, passive_cheat_mode  # Include cheat_mode_2 and passive_cheat_mode in the globals
 
     if not enemy_movement_started:
         return
@@ -156,7 +170,7 @@ def update_enemies():
     enemy_speed = 0.02 if weather_state != "rainy" else 0.035
     enemy_movement_timer += 1
 
-    for i, enemy in enumerate(enemies[:]):
+    for i, enemy in enumerate(enemies[:] ):
         if enemy_movement_timer % 8 == 0:
             dx = random.uniform(-enemy_speed, enemy_speed)
             dz = 0.05
@@ -170,28 +184,50 @@ def update_enemies():
                     enemies[i]['x'] = new_x
                     enemies[i]['z'] = new_z
 
-        # Shooting logic
-        dist_to_player = math.sqrt((player_x - enemy['x'])**2 + (player_z - enemy['z'])**2)
-        current_time = time.time()
-        if dist_to_player < 10:
-            if 'last_shot_time' not in enemy:
-                enemy['last_shot_time'] = current_time
-            if current_time - enemy['last_shot_time'] >= 1:
-                dx = player_x - enemy['x']
-                dz = player_z - enemy['z']
-                length = math.sqrt(dx**2 + dz**2)
-                if length != 0:
-                    dx /= length
-                    dz /= length
-                    bullets.append({
-                        'x': enemy['x'], 'y': 0.5, 'z': enemy['z'],
-                        'dx': dx * 0.1, 'dz': dz * 0.1,
-                        'type': 'enemy'
-                    })
-                enemy['last_shot_time'] = current_time
+        # If Cheat Mode 2 (passive mode) is active, handle collisions and score increment
+        if cheat_mode_2:  # Player is invisible, enemies won't shoot or move towards player
+            dist_to_enemy = math.sqrt((player_x - enemy['x'])**2 + (player_z - enemy['z'])**2)
+            if dist_to_enemy < 1.2:  # Player collides with enemy within a threshold range
+                enemies.pop(i)  # Remove the enemy from the list
+                score += 1  # Increase score for destroying enemy
+                print(f"Enemy destroyed by passive mode! Score: {score}")
+                respawn_enemy(enemy)  # Respawn the enemy
+                continue  # Move to the next enemy
+        
+        # Check if enemy collides with traps
+        for trap in traps[:]:
+            dist_to_trap = math.sqrt((enemy['x'] - trap['x'])**2 + (enemy['z'] - trap['z'])**2)
+            if dist_to_trap < 1.0:  # If the enemy is near the trap (within a certain distance)
+                print(f"Enemy fell into the trap! Score: {score}")
+                enemies.pop(i)  # Remove the enemy
+                traps.remove(trap)  # Remove the trap
+                score += 1  # Increase the score
+                respawn_enemy(enemy)  # Respawn the enemy
+                break
+                
+        # Shooting logic (only if Cheat Mode 2 is NOT active)
+        if not cheat_mode_2:
+            dist_to_player = math.sqrt((player_x - enemy['x'])**2 + (player_z - enemy['z'])**2)
+            current_time = time.time()
+            if dist_to_player < 10:  # Shoot at the player if they are within range
+                if 'last_shot_time' not in enemy:
+                    enemy['last_shot_time'] = current_time
+                if current_time - enemy['last_shot_time'] >= 1:
+                    dx = player_x - enemy['x']
+                    dz = player_z - enemy['z']
+                    length = math.sqrt(dx**2 + dz**2)
+                    if length != 0:
+                        dx /= length
+                        dz /= length
+                        bullets.append({
+                            'x': enemy['x'], 'y': 0.5, 'z': enemy['z'],
+                            'dx': dx * 0.1, 'dz': dz * 0.1,
+                            'type': 'enemy'
+                        })
+                    enemy['last_shot_time'] = current_time
 
-        # Collision detection (only with player bullets)
-        for bullet in bullets:
+        # Collision detection with player bullets (check only player bullets)
+        for bullet in bullets[:]:
             if bullet.get('type', 'player') == 'player':  # Check only player bullets
                 if abs(bullet['x'] - enemy['x']) < 1 and abs(bullet['z'] - enemy['z']) < 1:
                     print("Enemy destroyed by player bullet.")
@@ -201,8 +237,6 @@ def update_enemies():
                     spawn_z = random.uniform(-45, -35)
                     enemies.insert(i, {'x': spawn_x, 'z': spawn_z, 'angle': 0, 'y': 0.5})
                     break
-
-
 
 
 
@@ -243,8 +277,6 @@ def draw_rain():
 # Function to update car and enemy speeds when it's rainy
 def update_car_speed():
     global player_speed, enemy_movement_timer, weather_state, boost_active
-
-    
     if weather_state == "rainy":
         player_speed = 0.8  # Increase player speed in rainy weather
         enemy_movement_timer = max(0.4, enemy_movement_timer)  # Speed up enemy movement
@@ -256,6 +288,7 @@ def keyboardListener(key, x, y):
     global player_x, player_z, player_angle
     global enemy_movement_started, weather_state, rain_drops
     global cheat_mode, boost_active, boost_timer, player_speed
+    global cheat_mode_2, cheat_mode_2_start_time
 
     rot_step = 2
     base_speed = player_speed  # Use player_speed as the base speed
@@ -305,8 +338,21 @@ def keyboardListener(key, x, y):
     elif key == b'c' or key == b'C':  # Toggle cheat mode
         cheat_mode = not cheat_mode
         print(f"Cheat mode {'ON' if cheat_mode else 'OFF'}")
-    
+        
+    if score >= 10 and key == b'b' and not cheat_mode_2:
+        cheat_mode_2 = True
+        cheat_mode_2_start_time = time.time()  # Start timer for cheat mode 2
+        print("Cheat mode 2 activated: Player is invisible to enemies!")
 
+    # Deactivate Cheat Mode 2 after 5 seconds
+    if cheat_mode_2 and time.time() - cheat_mode_2_start_time > 5:
+        cheat_mode_2 = False
+        print("Cheat mode 2 deactivated.")
+    if key == b't':  # Player places a trap
+        trap_x = player_x - 1.0  # Positioning behind the player (adjust distance as needed)
+        trap_z = player_z + 1.0  # Slightly behind in the Z direction
+        traps.append({'x': trap_x, 'z': trap_z})  # Store 
+        
     glutPostRedisplay()
 
 
@@ -420,7 +466,7 @@ def showScreen():
 
     # Draw rain if the weather is rainy
     draw_rain()
-
+    draw_traps()
     # Draw bullets and other objects
     draw_bullets()
 
