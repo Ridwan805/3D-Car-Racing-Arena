@@ -13,6 +13,7 @@ player_bullets_fired = 0
 
 game_over = False
 game_won = False
+enemy_won = False
 
 player_wins = False
 font = GLUT_BITMAP_HELVETICA_18
@@ -196,8 +197,7 @@ def restart_game():
 
     # Respawn enemies
     respawn_enemy()  # Call to respawn all enemies
-
-       
+     
 def draw_text(x, y, text):
     glWindowPos2f(x, y)
     for ch in text:
@@ -350,9 +350,8 @@ def spawn_new_obstacle():
     obstacles.append(new_obstacle)
     print(f"New obstacle spawned at {new_obstacle}")
 
-
 def update_enemies():
-    global enemies, bullets, enemy_movement_started, enemy_movement_timer
+    global enemies, bullets, enemy_movement_started, enemy_movement_timer, enemy_won, game_won
     global player_x, player_z, weather_state, player_life, game_over, score
 
     if not enemy_movement_started or game_over:
@@ -439,10 +438,12 @@ def update_enemies():
                     break
 
         # --- CHECK ENEMY REACHES TOP LINE ---
-        if enemy['z'] >= 45 and not game_won:
-            game_over = True
-            print("Game Over: Enemy reached finish line!")
-            return
+        for enemy in enemies:
+            if enemy['z'] >= 44 and not game_won:
+                enemy_won = True
+                game_over = True
+                print("Game Over: Enemy reached finish line!")
+                return
 
 def respawn_enemy():
     global enemies  # Ensure the global enemies list is used
@@ -456,8 +457,6 @@ def respawn_enemy():
                 break
         used_x.append(spawn_x)
         enemy.update({'x': spawn_x, 'y': 0.5, 'z': -45.0, 'angle': 0})
-
-
 
 def generate_rain():
     rain_drops = []
@@ -485,12 +484,12 @@ def draw_rain():
                 raindrop['y'] = random.uniform(5, 10)
 
 def keyboardListener(key, x, y):
-    global player_x, player_z, player_angle
+    global player_x, player_z, player_angle, enemy_won
     global enemy_movement_started, weather_state, rain_drops,cheat_mode_2_start_time, cheat_mode_2
     global cheat_mode, boost_active, boost_timer, player_speed
-    global player_bullet_limit, player_bullets_fired, game_over, game_won
+    global player_bullet_limit, player_bullets_fired, game_over, game_won, enemies
 
-    if game_over or game_won:
+    if game_over or game_won  or enemy_won:
         return  # prevent movement if game ended
 
     rot_step = 2
@@ -527,6 +526,12 @@ def keyboardListener(key, x, y):
                 player_z = new_z
             if new_z >= 45 and not game_over:
                 game_won = True
+            
+            for enemy in enemies: 
+                if enemy['z'] >= 44:
+                    enemy_won = True
+                    game_over = True
+                    return
                 
 
         elif key == b's':
@@ -580,7 +585,7 @@ def specialKeyListener(key, x, y):
         camera_height = max(2, camera_height - 1)
 
 def mouseListener(button, state, x, y):
-    global camera_view, bullets, player_bullets_fired, player_bullet_limit, game_over, is_playing
+    global camera_view, bullets, player_bullets_fired, player_bullet_limit, game_over, is_playing, enemy_won
     y = 800 - y 
     
 
@@ -595,7 +600,9 @@ def mouseListener(button, state, x, y):
         if (30) <= x <= (80) and (750 -15) <= y <= (750 + 15):  # Restart
             print('Restarting the game...')
             restart_game()
-        if is_playing == False or game_over: 
+        if enemy_won:
+            return
+        if is_playing == False or game_over : 
             return
         else:
           if 0 <= x <= 1000 and  0 <= y <= 720:
@@ -635,9 +642,9 @@ def setupCamera():
         gluLookAt(player_x, player_y + 2, player_z, lx, player_y + 2, lz, 0, 1, 0)
         
 def animate():
-    global enemies, bullets, missed_bullets, life, game_over, score, cheat_mode
+    global enemies, bullets, game_over, score, cheat_mode
     global player_x, player_z, player_angle
-    global boost_active, boost_timer, game_won
+    global boost_active, boost_timer, game_won, enemy_won
     global player_bullets_fired, player_bullet_limit
     global enemy_movement_started
     global boost_active, boost_timer, boost_duration, player_speed
@@ -655,38 +662,30 @@ def animate():
         player_speed = 0.3  # Default speed
     
 
-    if game_over or game_won:
+    if game_over == True or game_won == True or enemy_won == True:
         return  # Stop updates
     if is_playing == False: # Codition happens then pause
         return  
 
-    if cheat_mode:
-        # Auto-drive towards closest enemy
-        closest_enemy = min(enemies, key=lambda e: math.sqrt((player_x - e['x'])**2 + (player_z - e['z'])**2), default=None)
-        if closest_enemy:
-            dx = closest_enemy['x'] - player_x
-            dz = closest_enemy['z'] - player_z
-            angle_to_enemy = math.atan2(dz, dx)
-            player_angle = math.degrees(angle_to_enemy)
+    if cheat_mode and enemies:
+        # 1) pick the closest enemy
+        closest = min(enemies, key=lambda e: (player_x-e['x'])**2 + (player_z-e['z'])**2)
+        dx = closest['x'] - player_x
+        dz = closest['z'] - player_z
+        dist = math.hypot(dx, dz)
+        if dist > 0:
+            dx /= dist
+            dz /= dist
 
-            move_step = 0.2  # Slow auto-move
-            player_x += move_step * math.cos(angle_to_enemy)
-            player_z += move_step * math.sin(angle_to_enemy)
+            # 2) fire *every* frame with high speed so you never miss
+            speed = 1.0  # tweak: higher = faster bullets
+            bullets.append({
+                'x': player_x, 'y': 0.5, 'z': player_z,
+                'dx': dx * speed, 'dz': dz * speed,
+                'type': 'player'
+            })
+            # player_bullets_fired += 1
 
-            dist_to_enemy = math.sqrt((player_x - closest_enemy['x'])**2 + (player_z - closest_enemy['z'])**2)
-            if dist_to_enemy < 10:
-                dx = closest_enemy['x'] - player_x
-                dz = closest_enemy['z'] - player_z
-                length = math.sqrt(dx**2 + dz**2)
-                if length != 0:
-                    dx /= length
-                    dz /= length
-                    bullets.append({
-                        'x': player_x, 'y': 0.5, 'z': player_z,
-                        'dx': dx * 0.2, 'dz': dz * 0.2,
-                        'type': 'player'
-                    })
-                    player_bullets_fired += 1
 
     # BOOST TIMER CHECK
     if boost_active:
@@ -700,13 +699,14 @@ def animate():
     if player_z >= 45:
         game_won = True
         print("Player reached top line. YOU WIN!")
-
+        return
     # Check if enemy reached top first
     for enemy in enemies:
-        if enemy['z'] >= 45:
+        if enemy['z'] >= 44:
             game_over = True
             print("Enemy reached top line before player. GAME OVER!")
-
+            return 
+        
     update_bullets()
     update_enemies()
     glutPostRedisplay()
@@ -787,8 +787,7 @@ def iterate():
     glOrtho(0.0, 1000, 0.0, 800, -1.0, 1.0)  # Fix this line, make the Z range -1 to 1 for 2D drawing
     glMatrixMode(GL_MODELVIEW)
     glLoadIdentity()
-    
-   
+      
 def main():
     glutInit()
     glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGB | GLUT_DEPTH)
