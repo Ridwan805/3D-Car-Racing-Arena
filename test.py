@@ -456,8 +456,6 @@ def respawn_enemy():
         used_x.append(spawn_x)
         enemy.update({'x': spawn_x, 'y': 0.5, 'z': -45.0, 'angle': 0})
 
-
-
 def generate_rain():
     rain_drops = []
     for _ in range(100):  

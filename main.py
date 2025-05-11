@@ -5,7 +5,7 @@ import math
 import random
 import time
 
-# Player attributes
+# player info
 player_life = 10
 player_bullets_left = 20
 player_bullet_limit = 20
@@ -28,26 +28,30 @@ camera_angle_h = 0
 camera_height = 10
 enemy_movement_started = False
 enemy_movement_timer = 0
-weather_state = "day"  # Can be "day", "night", or "rainy"
+weather_state = "day"  
 rain_drops = []
 bullets = []
 enemies = []
 obstacles = []
 score = 10
-boost_active = False
-boost_timer = 0  # Tracks time since boost started
-boost_duration = 120  # 2 seconds at 60 FPS (120 frames)
-boost_active = False  # Flag to indicate if the boost is active
-boost_multiplier = 2  # Boost multiplier (increase speed by 2x)
-boost_duration_frames = 120  # ~2 seconds at 60fps
 
-# Global variable initialization
-enemy_movement_started = False  # Set to False initially to prevent movement
-enemy_movement_timer = 0  # Initialize enemy movement timer
+#for boost 
+boost_active = False
+boost_timer = 0  
+boost_duration = 120  
+boost_active = False 
+boost_multiplier = 2  
+boost_duration_frames = 120  
+
+#enemy movement
+enemy_movement_started = False  
+enemy_movement_timer = 0 
+
+#cheat modes and traps
 cheat_mode = False
-cheat_mode_2 = False  # Cheat Mode 2 (Invisible Player)
+cheat_mode_2 = False 
 passive_cheat_mode = False
-cheat_mode_2_start_time = 0  # Initialize start time for cheat mode 2
+cheat_mode_2_start_time = 0  
 traps = []
 is_playing = True
 
@@ -169,34 +173,36 @@ def restart_game():
     global player_x, player_z, player_life, player_bullets_fired, score, game_over, is_playing, enemy_won
     global bullets, enemies, traps, cheat_mode, weather_state, rain_drops
     global player_angle, camera_angle_h, camera_height, camera_view, player_y, weather_state,enemy_movement_started,enemy_movement_timer
-    # Reset the game variables
+   
     player_x = 0.0
     player_z = -45.0
     player_y = 0.0 
     player_life = 10
     player_bullets_fired = 0
+    
     score = 0
+    
     game_over = False
-    is_playing = True  # Start the game again
+    is_playing = True  
     camera_view = "third_person"
     camera_angle_h = 0
     camera_height = 10
     player_angle = 0.0
     weather_state = "day" 
-    enemy_movement_started = False  # Set to False initially to prevent movement
+    
+    enemy_movement_started = False  
     enemy_movement_timer = 0 
-    # Reset game objects (e.g., bullets, enemies, traps)
+ 
     bullets = []
-    enemies = []  # You may want to re-initialize enemies here, depending on your logic
+    enemies = [] 
     traps = []
 
-    # Reset cheat mode and weather state
     cheat_mode = False
-    weather_state = "day"  # Default to "day"
+    weather_state = "day" 
     rain_drops = []
     enemy_won = False
-    # Respawn enemies
-    respawn_enemy()  # Call to respawn all enemies
+    
+    respawn_enemy()  
      
 def draw_text(x, y, text):
     glWindowPos2f(x, y)
@@ -238,15 +244,15 @@ def draw_track():
 def draw_traps():
     for trap in traps:
         glPushMatrix()
-        glTranslatef(trap['x'], 0.5, trap['z'])  # Position the trap behind the player
-        glColor3f(1.0, 0.0, 0.0)  # Red color for traps
-        glutSolidSphere(0.2, 20, 20)  # Draw a red sphere representing a trap
+        glTranslatef(trap['x'], 0, trap['z'])  
+        glColor3f(1.0, 0.0, 0.0)  
+        glutSolidSphere(0.2, 20, 20)  
         glPopMatrix()
 
 def draw_obstacle():
     global obstacles
     if not obstacles:
-        # Removed 2 obstacles for better enemy/player navigation
+        
         obstacles = [
             (-10, 0.0, -30), (-10, 0.0, 10), 
             (10, 0.0, -20), (0, 0.0, 0),
@@ -288,9 +294,9 @@ def draw_enemy_car():
     global enemies
     if not enemies:
         safe_dist = 2.0
-        used_x = [player_x]   # start by reserving the player’s x
+        used_x = [player_x]    
         for _ in range(2):
-            # pick a random x that's at least safe_dist from everyone else
+          
             while True:
                 ex = random.uniform(-10, 10)
                 if all(abs(ex - ox) > safe_dist for ox in used_x):
@@ -302,11 +308,10 @@ def draw_enemy_car():
         glTranslatef(enemy['x'], enemy['y'], enemy['z'])
         glRotatef(enemy['angle'], 0, 1, 0)
 
-        # Back side - blue
         glColor3f(0.0, 0.0, 1.0)
         glutSolidCube(1.0)
 
-        # Front side - purple (slightly forward)
+       
         glTranslatef(0.0, 0.0, 0.6)
         glColor3f(0.5, 0.0, 1.0)
         glutSolidCube(0.5)
@@ -331,16 +336,14 @@ def update_bullets():
         for obstacle in obstacles[:]:
             if (abs(bullet['x'] - obstacle[0]) < 1.5 and
                 abs(bullet['z'] - obstacle[2]) < 1.5):
-                # Remove the bullet
+                
                 bullets.remove(bullet)
-                # Remove the obstacle
                 obstacles.remove(obstacle)
-                print(f"Obstacle hit! New obstacle will appear.")
-                # Add a new obstacle
+                
                 spawn_new_obstacle()
-                break  # Stop checking for collisions once the bullet is removed
+                break  
         
-        # Remove bullet if it's out of bounds
+        # remove bullet if its out of bounds
         if abs(bullet['x']) > 50 or abs(bullet['z']) > 50:
             bullets.remove(bullet)
 
@@ -348,8 +351,7 @@ def spawn_new_obstacle():
     # Randomly place a new obstacle within a specific range
     new_obstacle = (random.uniform(-15, 15), 0.0, random.uniform(45, -45))
     obstacles.append(new_obstacle)
-    print(f"New obstacle spawned at {new_obstacle}")
-    
+  
 def update_enemies():
     global enemies, bullets, enemy_movement_started, enemy_movement_timer, enemy_won, game_won
     global player_x, player_z, weather_state, player_life, game_over, score
@@ -368,29 +370,28 @@ def update_enemies():
             new_x = enemy['x'] + dx
             new_z = enemy['z'] + dz
 
-            # Check obstacle collision
+            # check obstacle collision
             if not any(abs(new_x - ox) < 1.5 and abs(new_z - oz) < 1.5 for ox, oy, oz in obstacles):
                 if -15 <= new_x <= 15 and -45 <= new_z <= 45:
                     enemies[i]['x'] = new_x
                     enemies[i]['z'] = new_z
 
-        # --- ENEMY SHOOTING ---
-        if cheat_mode_2:  # Player is invisible, enemies won't shoot or move towards player
+        # check enemy shoot
+        if cheat_mode_2:  
             dist_to_enemy = math.sqrt((player_x - enemy['x'])**2 + (player_z - enemy['z'])**2)
-            if dist_to_enemy < 1.2:  # Player collides with enemy within a threshold range
-                enemies.pop(i)  # Remove the enemy from the list
-                score += 1  # Increase score for destroying enemy
-                print(f"Enemy destroyed by passive mode! Score: {score}")
-                respawn_enemy()  # Respawn the enemy
-                continue  # Move to the next enemy
+            if dist_to_enemy < 1.2: 
+                enemies.pop(i) 
+                score += 1  
+                respawn_enemy()  
+                continue
         for trap in traps[:]:
             dist_to_trap = math.sqrt((enemy['x'] - trap['x'])**2 + (enemy['z'] - trap['z'])**2)
-            if dist_to_trap < 1.0:  # If the enemy is near the trap (within a certain distance)
-                print(f"Enemy fell into the trap! Score: {score}")
-                enemies.pop(i)  # Remove the enemy
-                traps.remove(trap)  # Remove the trap
-                score += 1  # Increase the score
-                respawn_enemy()  # Respawn the enemy
+            if dist_to_trap < 1.0:  
+              
+                enemies.pop(i) 
+                traps.remove(trap) 
+                score += 1  
+                respawn_enemy()  
                 break
                 
         if not cheat_mode_2:       
@@ -413,22 +414,22 @@ def update_enemies():
                         })
                     enemy['last_shot_time'] = current_time
 
-        # --- CHECK ENEMY BULLET HITS PLAYER ---
+        # enemy hit player with bullet
         for bullet in bullets[:]:
             if bullet.get('type') == 'enemy':
                 if abs(bullet['x'] - player_x) < 1 and abs(bullet['z'] - player_z) < 1:
                     bullets.remove(bullet)
                     player_life -= 1
-                    print(f"Player hit! Life left: {player_life}")
+                   
                     if player_life <= 0:
                         game_over = True
-                        print("Game Over: Player lost all lives.")
+                        
 
-        # --- CHECK PLAYER BULLET HITS ENEMY ---
+        #player hit enemy with bullet
         for bullet in bullets[:]:
             if bullet.get('type') == 'player':
                 if abs(bullet['x'] - enemy['x']) < 1 and abs(bullet['z'] - enemy['z']) < 1:
-                    print("Enemy destroyed by player bullet.")
+                    
                     bullets.remove(bullet)
                     enemies.pop(i)
                     score += 1
@@ -437,7 +438,7 @@ def update_enemies():
                     enemies.insert(i, {'x': spawn_x, 'z': spawn_z, 'angle': 0, 'y': 0.5})
                     break
 
-        # --- CHECK ENEMY REACHES TOP LINE ---
+        # if enemy wins
         for enemy in enemies:
             if enemy['z'] >= 44 and not game_won:
                 enemy_won = True
@@ -446,7 +447,7 @@ def update_enemies():
                 return
 
 def respawn_enemy():
-    global enemies  # Ensure the global enemies list is used
+    global enemies  
 
     safe_dist = 2.0
     used_x = [player_x]
@@ -459,29 +460,24 @@ def respawn_enemy():
         enemy.update({'x': spawn_x, 'y': 0.5, 'z': -45.0, 'angle': 0})
 
 def generate_rain():
+    global rain_drops
     rain_drops = []
-    for _ in range(100):  # Generate 100 raindrops
+    for _ in range(300):  
         x = random.uniform(-15, 15)
         z = random.uniform(-45, 45)
-        y = random.uniform(5, 10)  # Start the rain from the top of the screen
+        y = random.uniform(5, 10)
         rain_drops.append({'x': x, 'y': y, 'z': z})
     return rain_drops
 
 def draw_rain():
     global rain_drops
     if weather_state == "rainy":
-        glColor3f(0.7, 0.7, 1.0)  # Light blue color for rain
+        glColor3f(0.7, 0.7, 1.0)
         glBegin(GL_LINES)
         for raindrop in rain_drops:
             glVertex3f(raindrop['x'], raindrop['y'], raindrop['z'])
-            glVertex3f(raindrop['x'], raindrop['y'] - 1, raindrop['z'])  # Rain drops fall down
+            glVertex3f(raindrop['x'], raindrop['y'] - 0.8, raindrop['z'])  # longer streak
         glEnd()
-
-        # Update rain drops to fall
-        for raindrop in rain_drops:
-            raindrop['y'] -= 0.1  # Move raindrop downward
-            if raindrop['y'] < -45:  # If raindrop goes below the track, reset it
-                raindrop['y'] = random.uniform(5, 10)
 
 def keyboardListener(key, x, y):
     global player_x, player_z, player_angle, enemy_won
@@ -490,12 +486,12 @@ def keyboardListener(key, x, y):
     global player_bullet_limit, player_bullets_fired, game_over, game_won, enemies
 
     if game_over or game_won  or enemy_won:
-        return  # prevent movement if game ended
+        return  
 
     rot_step = 2
     base_speed = 0.3
 
-    # Adjust speed based on weather
+   
     if weather_state == "rainy":
         base_speed *= 1.5
     if cheat_mode:
@@ -513,9 +509,11 @@ def keyboardListener(key, x, y):
         return False
     
     if is_playing:
-        if key == b' ' and not boost_active:  # Activate boost when spacebar is pressed
+        if key == b' ' and not boost_active:
             boost_active = True
-            boost_timer = 0  # Reset the boost timer
+            boost_timer = time.time()
+            print("Boost activated!")
+
             print("Boost activated!")
         if key == b'w':
             enemy_movement_started = True
@@ -553,10 +551,7 @@ def keyboardListener(key, x, y):
             rain_drops = generate_rain()
         elif key == b'c' or key == b'C':
             cheat_mode = not cheat_mode
-        elif key == b' ':
-            if player_bullets_fired < player_bullet_limit:
-                boost_active = True
-                boost_timer = 120  # ~2 seconds
+
         if score >= 10 and key == b'b' and not cheat_mode_2:
             cheat_mode_2 = True
             cheat_mode_2_start_time = time.time()  # Start timer for cheat mode 2
@@ -593,7 +588,6 @@ def mouseListener(button, state, x, y):
         if (500-10)<= x <=(500+10) and (750  -15) <= y <= (750 +15): #when pause/resume is pressed
             is_playing = not is_playing
             
-        print(x,y)
         if (950-15)<= x <=(950+15) and (750 -15) <= y <= (750 +15): #when quit is pressed 
             print('Goodbye! Score:', score)
             glutLeaveMainLoop()
@@ -649,25 +643,13 @@ def animate():
     global enemy_movement_started
     global boost_active, boost_timer, boost_duration, player_speed
 
-    if boost_active:
-        boost_timer += 1
-        if boost_timer >= boost_duration:
-            boost_active = False  # End the boost after the specified duration
-            print("Boost ended.")
-    
-    # Update player speed if boost is active
-    if boost_active:
-        player_speed = 0.3 * boost_multiplier  # Increase speed by the multiplier (2x)
-    else:
-        player_speed = 0.3  # Default speed
-    
 
     if game_over == True or game_won == True or enemy_won == True:
-        return  # Stop updates
-    if is_playing == False: # Codition happens then pause
+        return  # if game over everything stops 
+    if is_playing == False: # if paused
         return  
     if cheat_mode and enemies:
-            # 1) pick the closest enemy
+            
             closest_enemy = min(enemies, key=lambda e: math.sqrt((player_x - e['x'])**2 + (player_z - e['z'])**2), default=None)
             if closest_enemy:
                 dx = closest_enemy['x'] - player_x
@@ -694,25 +676,33 @@ def animate():
                         })
                 
 
-
-        # BOOST TIMER CHECK
-        if boost_active:
-            boost_timer += 1
-            if boost_timer >= boost_duration_frames:
-                boost_active = False
-                boost_timer = 0
-                print("Boost ended.")
+    if weather_state == "rainy":
+        for raindrop in rain_drops:
+            raindrop['y'] -= 0.09 
+            if raindrop['y'] < 0:  # respawn rain
+                raindrop['x'] = random.uniform(-30, 30)
+                raindrop['z'] = random.uniform(-45, 60)
+                raindrop['y'] = random.uniform(5, 20)
+            
+    if boost_active:
+        player_speed = 0.3 * boost_multiplier
+        if time.time() - boost_timer >= 2.0:  
+            boost_active = False
+            player_speed = 0.3
+            print("Boost ended.")
+        else:
+            player_speed = 0.3
 
     # Check win condition
     if player_z >= 45:
         game_won = True
-        print("Player reached top line. YOU WIN!")
         return
-    # Check if enemy reached top first
+    
+    # check if enemy reached top first
     for enemy in enemies:
         if enemy['z'] >= 44:
             game_over = True
-            print("Enemy reached top line before player. GAME OVER!")
+            
             return 
         
     update_bullets()
@@ -739,36 +729,33 @@ def showScreen():
     draw_rain()
     draw_traps()
     draw_bullets()
-    
     iterate()
-
-    # Draw buttons in 2D after 3D scene
     draw_buttons()
 
-    # ----------------- On-screen Text -----------------
+   
     glMatrixMode(GL_PROJECTION)
     glPushMatrix()
     glLoadIdentity()
-    gluOrtho2D(0, 1000, 0, 800)  # Match the window size
+    gluOrtho2D(0, 1000, 0, 800)  
     glMatrixMode(GL_MODELVIEW)
     glPushMatrix()
     glLoadIdentity()
 
-    # Top-left info (white text)
+   
     glColor3f(1, 1, 1)
-    glRasterPos2f(10, 150)  # Current position is at the top
+    glRasterPos2f(10, 150) 
     for ch in f"Bullets Left: {max(0, player_bullet_limit - player_bullets_fired)}":
         glutBitmapCharacter(GLUT_BITMAP_HELVETICA_18, ord(ch))
 
-    glRasterPos2f(10, 100)  # Current position is at the top
+    glRasterPos2f(10, 100) 
     for ch in f"Lives Left: {player_life}":
         glutBitmapCharacter(GLUT_BITMAP_HELVETICA_18, ord(ch))
 
-    glRasterPos2f(10, 50)  # Current position is at the top
+    glRasterPos2f(10, 50)
     for ch in f"Score: {score}":
         glutBitmapCharacter(GLUT_BITMAP_HELVETICA_18, ord(ch))
 
-    # Top-right message (game over or win)
+    
     if enemy_won:
         glColor3f(1, 0, 0)
         glRasterPos2f(760, 50)
@@ -786,7 +773,7 @@ def showScreen():
             glutBitmapCharacter(GLUT_BITMAP_HELVETICA_18, ord(ch))
     
 
-    # Restore matrices
+  
     glMatrixMode(GL_PROJECTION)
     glPopMatrix()
     glMatrixMode(GL_MODELVIEW)
@@ -798,8 +785,7 @@ def iterate():
     glViewport(0, 0, 1000, 800)
     glMatrixMode(GL_PROJECTION)
     glLoadIdentity()
-    glOrtho(0.0, 1000, 0.0, 800, -1.0, 1.0)  # Fix this line, make the Z range -1 to 1 for 2D drawing
-    glMatrixMode(GL_MODELVIEW)
+    glOrtho(0.0, 1000, 0.0, 800, -1.0, 1.0)  
     glLoadIdentity()
       
 def main():
