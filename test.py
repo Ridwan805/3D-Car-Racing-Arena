@@ -686,7 +686,7 @@ def animate():
                         'dx': dx * 0.2, 'dz': dz * 0.2,
                         'type': 'player'
                     })
-                    player_bullets_fired += 1
+                    
 
     # BOOST TIMER CHECK
     if boost_active:

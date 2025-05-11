@@ -166,7 +166,7 @@ def draw_buttons():
     draw_pause_play(500, 750)  # Adjust positioning
 
 def restart_game():
-    global player_x, player_z, player_life, player_bullets_fired, score, game_over, is_playing
+    global player_x, player_z, player_life, player_bullets_fired, score, game_over, is_playing, enemy_won
     global bullets, enemies, traps, cheat_mode, weather_state, rain_drops
     global player_angle, camera_angle_h, camera_height, camera_view, player_y, weather_state,enemy_movement_started,enemy_movement_timer
     # Reset the game variables
@@ -194,7 +194,7 @@ def restart_game():
     cheat_mode = False
     weather_state = "day"  # Default to "day"
     rain_drops = []
-
+    enemy_won = False
     # Respawn enemies
     respawn_enemy()  # Call to respawn all enemies
      
@@ -346,10 +346,10 @@ def update_bullets():
 
 def spawn_new_obstacle():
     # Randomly place a new obstacle within a specific range
-    new_obstacle = (random.uniform(-15, 15), 0.0, random.uniform(-45, -35))
+    new_obstacle = (random.uniform(-15, 15), 0.0, random.uniform(45, -45))
     obstacles.append(new_obstacle)
     print(f"New obstacle spawned at {new_obstacle}")
-
+    
 def update_enemies():
     global enemies, bullets, enemy_movement_started, enemy_movement_timer, enemy_won, game_won
     global player_x, player_z, weather_state, player_life, game_over, score
@@ -666,34 +666,42 @@ def animate():
         return  # Stop updates
     if is_playing == False: # Codition happens then pause
         return  
-
     if cheat_mode and enemies:
-        # 1) pick the closest enemy
-        closest = min(enemies, key=lambda e: (player_x-e['x'])**2 + (player_z-e['z'])**2)
-        dx = closest['x'] - player_x
-        dz = closest['z'] - player_z
-        dist = math.hypot(dx, dz)
-        if dist > 0:
-            dx /= dist
-            dz /= dist
+            # 1) pick the closest enemy
+            closest_enemy = min(enemies, key=lambda e: math.sqrt((player_x - e['x'])**2 + (player_z - e['z'])**2), default=None)
+            if closest_enemy:
+                dx = closest_enemy['x'] - player_x
+                dz = closest_enemy['z'] - player_z
+                angle_to_enemy = math.atan2(dz, dx)
+                player_angle = math.degrees(angle_to_enemy)
 
-            # 2) fire *every* frame with high speed so you never miss
-            speed = 1.0  # tweak: higher = faster bullets
-            bullets.append({
-                'x': player_x, 'y': 0.5, 'z': player_z,
-                'dx': dx * speed, 'dz': dz * speed,
-                'type': 'player'
-            })
-            # player_bullets_fired += 1
+                move_step = 0.2  # Slow auto-move
+                player_x += move_step * math.cos(angle_to_enemy)
+                player_z += move_step * math.sin(angle_to_enemy)
+
+                dist_to_enemy = math.sqrt((player_x - closest_enemy['x'])**2 + (player_z - closest_enemy['z'])**2)
+                if dist_to_enemy < 10:
+                    dx = closest_enemy['x'] - player_x
+                    dz = closest_enemy['z'] - player_z
+                    length = math.sqrt(dx**2 + dz**2)
+                    if length != 0:
+                        dx /= length
+                        dz /= length
+                        bullets.append({
+                            'x': player_x, 'y': 0.5, 'z': player_z,
+                            'dx': dx * 0.2, 'dz': dz * 0.2,
+                            'type': 'player'
+                        })
+                
 
 
-    # BOOST TIMER CHECK
-    if boost_active:
-        boost_timer += 1
-        if boost_timer >= boost_duration_frames:
-            boost_active = False
-            boost_timer = 0
-            print("Boost ended.")
+        # BOOST TIMER CHECK
+        if boost_active:
+            boost_timer += 1
+            if boost_timer >= boost_duration_frames:
+                boost_active = False
+                boost_timer = 0
+                print("Boost ended.")
 
     # Check win condition
     if player_z >= 45:
@@ -761,16 +769,22 @@ def showScreen():
         glutBitmapCharacter(GLUT_BITMAP_HELVETICA_18, ord(ch))
 
     # Top-right message (game over or win)
-    if game_over:
+    if enemy_won:
+        glColor3f(1, 0, 0)
+        glRasterPos2f(760, 50)
+        for ch in "PLAYER LOSES!":
+            glutBitmapCharacter(GLUT_BITMAP_HELVETICA_18, ord(ch))
+    elif game_over:
         glColor3f(1, 0, 0)
         glRasterPos2f(800, 50)
-        for ch in "🚨 GAME OVER":
+        for ch in "GAME OVER":
             glutBitmapCharacter(GLUT_BITMAP_HELVETICA_18, ord(ch))
     elif game_won:
         glColor3f(0, 1, 0)
         glRasterPos2f(780, 50)
-        for ch in "🏁 PLAYER WINS!":
+        for ch in "PLAYER WINS!":
             glutBitmapCharacter(GLUT_BITMAP_HELVETICA_18, ord(ch))
+    
 
     # Restore matrices
     glMatrixMode(GL_PROJECTION)
