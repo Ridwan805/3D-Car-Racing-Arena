@@ -172,7 +172,7 @@ def draw_buttons():
 def restart_game():
     global player_x, player_z, player_life, player_bullets_fired, score, game_over, is_playing, enemy_won
     global bullets, enemies, traps, cheat_mode, weather_state, rain_drops
-    global player_angle, camera_angle_h, camera_height, camera_view, player_y, weather_state,enemy_movement_started,enemy_movement_timer
+    global game_won, player_angle, camera_angle_h, camera_height, camera_view, player_y, weather_state,enemy_movement_started,enemy_movement_timer
    
     player_x = 0.0
     player_z = -45.0
@@ -181,7 +181,7 @@ def restart_game():
     player_bullets_fired = 0
     
     score = 0
-    
+    game_won = False
     game_over = False
     is_playing = True  
     camera_view = "third_person"
