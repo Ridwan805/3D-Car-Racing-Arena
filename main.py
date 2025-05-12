@@ -362,7 +362,9 @@ def update_enemies():
     enemy_speed = 0.02 if weather_state != "rainy" else 0.035
     enemy_movement_timer += 1
 
-    for i, enemy in enumerate(enemies[:]):
+    i = 0
+    while i < len(enemies):
+        enemy = enemies[i]
         if enemy_movement_timer % 8 == 0:
             dx = random.uniform(-enemy_speed, enemy_speed)
             dz = 0.05
@@ -370,31 +372,33 @@ def update_enemies():
             new_x = enemy['x'] + dx
             new_z = enemy['z'] + dz
 
-            # check obstacle collision
             if not any(abs(new_x - ox) < 1.5 and abs(new_z - oz) < 1.5 for ox, oy, oz in obstacles):
                 if -15 <= new_x <= 15 and -45 <= new_z <= 45:
-                    enemies[i]['x'] = new_x
-                    enemies[i]['z'] = new_z
+                    enemy['x'] = new_x
+                    enemy['z'] = new_z
 
-        # check enemy shoot
-        if cheat_mode_2:  
+        if cheat_mode_2:
             dist_to_enemy = math.sqrt((player_x - enemy['x'])**2 + (player_z - enemy['z'])**2)
-            if dist_to_enemy < 1.2: 
-                enemies.pop(i) 
-                score += 1  
-                respawn_enemy()  
+            if dist_to_enemy < 1.2:
+                enemies.pop(i)
+                score += 1
+                respawn_enemy()
                 continue
+
+        hit_by_trap = False
         for trap in traps[:]:
             dist_to_trap = math.sqrt((enemy['x'] - trap['x'])**2 + (enemy['z'] - trap['z'])**2)
-            if dist_to_trap < 1.0:  
-              
-                enemies.pop(i) 
-                traps.remove(trap) 
-                score += 1  
-                respawn_enemy()  
+            if dist_to_trap < 1.0:
+                enemies.pop(i)
+                traps.remove(trap)
+                score += 1
+                respawn_enemy()
+                hit_by_trap = True
                 break
-                
-        if not cheat_mode_2:       
+        if hit_by_trap:
+            continue
+
+        if not cheat_mode_2:
             dist_to_player = math.sqrt((player_x - enemy['x'])**2 + (player_z - enemy['z'])**2)
             current_time = time.time()
             if dist_to_player < 10:
@@ -414,22 +418,17 @@ def update_enemies():
                         })
                     enemy['last_shot_time'] = current_time
 
-        # enemy hit player with bullet
         for bullet in bullets[:]:
             if bullet.get('type') == 'enemy':
                 if abs(bullet['x'] - player_x) < 1 and abs(bullet['z'] - player_z) < 1:
                     bullets.remove(bullet)
                     player_life -= 1
-                   
                     if player_life <= 0:
                         game_over = True
-                        
 
-        #player hit enemy with bullet
         for bullet in bullets[:]:
             if bullet.get('type') == 'player':
                 if abs(bullet['x'] - enemy['x']) < 1 and abs(bullet['z'] - enemy['z']) < 1:
-                    
                     bullets.remove(bullet)
                     enemies.pop(i)
                     score += 1
@@ -437,14 +436,16 @@ def update_enemies():
                     spawn_z = random.uniform(-45, -35)
                     enemies.insert(i, {'x': spawn_x, 'z': spawn_z, 'angle': 0, 'y': 0.5})
                     break
+        else:
+            i += 1
 
-        # if enemy wins
-        for enemy in enemies:
-            if enemy['z'] >= 44 and not game_won:
-                enemy_won = True
-                game_over = True
-                print("Game Over: Enemy reached finish line!")
-                return
+    for enemy in enemies:
+        if enemy['z'] >= 44 and not game_won:
+            enemy_won = True
+            game_over = True
+            print("Game Over: Enemy reached finish line!")
+            return
+
 
 def respawn_enemy():
     global enemies  
@@ -670,10 +671,11 @@ def animate():
                         dx /= length
                         dz /= length
                         bullets.append({
-                            'x': player_x, 'y': 0.5, 'z': player_z,
+                            'x': player_x + dx, 'y': 0.5, 'z': player_z + dz,
                             'dx': dx * 0.2, 'dz': dz * 0.2,
                             'type': 'player'
                         })
+
                 
 
     if weather_state == "rainy":
@@ -730,9 +732,8 @@ def showScreen():
     draw_traps()
     draw_bullets()
     iterate()
-    draw_buttons()
-
-   
+    
+    
     glMatrixMode(GL_PROJECTION)
     glPushMatrix()
     glLoadIdentity()
@@ -740,7 +741,7 @@ def showScreen():
     glMatrixMode(GL_MODELVIEW)
     glPushMatrix()
     glLoadIdentity()
-
+    draw_buttons()
    
     glColor3f(1, 1, 1)
     glRasterPos2f(10, 150) 
