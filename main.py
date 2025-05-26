@@ -446,7 +446,6 @@ def update_enemies():
             print("Game Over: Enemy reached finish line!")
             return
 
-
 def respawn_enemy():
     global enemies  
 
