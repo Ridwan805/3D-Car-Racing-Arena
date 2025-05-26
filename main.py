@@ -33,7 +33,7 @@ rain_drops = []
 bullets = []
 enemies = []
 obstacles = []
-score = 10
+score = 0
 
 #for boost 
 boost_active = False
